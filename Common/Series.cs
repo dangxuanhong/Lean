@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -27,46 +28,9 @@ namespace QuantConnect
     /// <summary>
     /// Chart Series Object - Series data and properties for a chart:
     /// </summary>
-    [JsonObject]
-    public class Series
+    [JsonConverter(typeof(SeriesJsonConverter))]
+    public class Series : BaseSeries
     {
-        /// <summary>
-        /// Name of the Series:
-        /// </summary>
-        public string Name = "";
-
-        /// <summary>
-        /// Axis for the chart series.
-        /// </summary>
-        public string Unit = "$";
-
-        /// <summary>
-        /// Index/position of the series on the chart.
-        /// </summary>
-        public int Index;
-
-        /// <summary>
-        ///  Values for the series plot:
-        /// These values are assumed to be in ascending time order (first points earliest, last points latest)
-        /// </summary>
-        public List<ChartPoint> Values = new List<ChartPoint>();
-
-        /// <summary>
-        /// Chart type for the series:
-        /// </summary>
-        public SeriesType SeriesType = SeriesType.Line;
-
-        /// <summary>
-        /// Color the series
-        /// </summary>
-        [JsonConverter(typeof(ColorJsonConverter))]
-        public Color Color = Color.Empty;
-
-        /// <summary>
-        /// Shape or symbol for the marker in a scatter plot
-        /// </summary>
-        public ScatterMarkerSymbol ScatterMarkerSymbol = ScatterMarkerSymbol.None;
-
         /// Get the index of the last fetch update request to only retrieve the "delta" of the previous request.
         private int _updatePosition;
 
@@ -192,13 +156,22 @@ namespace QuantConnect
         }
 
         /// <summary>
-        /// Add a new point to this series:
+        /// Add a new point to this series
         /// </summary>
         /// <param name="time">Time of the chart point</param>
         /// <param name="value">Value of the chart point</param>
         public void AddPoint(DateTime time, decimal value)
         {
             var chartPoint = new ChartPoint(time, value);
+            AddPoint(chartPoint);
+        }
+
+        /// <summary>
+        /// Add a new point to this series
+        /// </summary>
+        /// <param name="chartPoint">The data point to add</param>
+        public void AddPoint(ChartPoint chartPoint)
+        {
             if (Values.Count > 0 && Values[Values.Count - 1].x == chartPoint.x)
             {
                 // duplicate points at the same time, overwrite the value
@@ -246,6 +219,24 @@ namespace QuantConnect
         {
             Values.Clear();
             _updatePosition = 0;
+        }
+
+        /// <summary>
+        /// Will sum up all chart points into a new single value, using the time of lastest point
+        /// </summary>
+        /// <returns>The new chart point</returns>
+        public ChartPoint ConsolidateChartPoints()
+        {
+            if (Values.Count <= 0) return null;
+
+            var sum = 0m;
+            foreach (var point in Values)
+            {
+                sum += point.y;
+            }
+
+            var lastPoint = Values.Last();
+            return new ChartPoint(lastPoint.x, sum);
         }
 
         /// <summary>
